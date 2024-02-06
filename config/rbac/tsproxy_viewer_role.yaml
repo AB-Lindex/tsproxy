@@ -1,0 +1,27 @@
+# permissions for end users to view tsproxies.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: tsproxy-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: tsproxy
+    app.kubernetes.io/part-of: tsproxy
+    app.kubernetes.io/managed-by: kustomize
+  name: tsproxy-viewer-role
+rules:
+- apiGroups:
+  - proxy.lindex.com
+  resources:
+  - tsproxies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - proxy.lindex.com
+  resources:
+  - tsproxies/status
+  verbs:
+  - get

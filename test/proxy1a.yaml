@@ -1,0 +1,11 @@
+apiVersion: proxy.lindex.com/v1alpha1
+kind: TSProxy
+metadata:
+  name: proxy1
+  annotations:
+    test: a
+spec:
+  services:
+  - name: service1
+    port: 9338
+    exposeAs: 40001

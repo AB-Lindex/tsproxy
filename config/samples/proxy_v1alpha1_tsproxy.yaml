@@ -1,0 +1,12 @@
+apiVersion: proxy.lindex.com/v1alpha1
+kind: TSProxy
+metadata:
+  labels:
+    app.kubernetes.io/name: tsproxy
+    app.kubernetes.io/instance: tsproxy-sample
+    app.kubernetes.io/part-of: tsproxy
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: tsproxy
+  name: tsproxy-sample
+spec:
+  # TODO(user): Add fields here
