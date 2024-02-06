@@ -15,7 +15,8 @@ type metricsExporter struct {
 	workerMutex sync.Mutex
 	workers     prometheus.Counter
 
-	connectionsTotal prometheus.Counter
+	connectionsTotal  prometheus.Counter
+	connectionsActive *prometheus.GaugeVec
 
 	listeners *prometheus.GaugeVec
 }
@@ -39,10 +40,16 @@ func initMetrics() {
 	})
 	_ = metrics.Registry.Register(me.connectionsTotal)
 
+	me.connectionsActive = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "tsproxy_connection_active",
+		Help: "Active connections",
+	}, []string{"namespace", "name", "port", "exposed_as"})
+	_ = metrics.Registry.Register(me.connectionsActive)
+
 	me.listeners = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "tsproxy_listener_active",
 		Help: "Active listeners",
-	}, []string{"namespace", "name", "serviceport", "targetport"})
+	}, []string{"namespace", "name", "port", "exposed_as"})
 	_ = metrics.Registry.Register(me.listeners)
 
 	me.initDone = true
@@ -59,9 +66,31 @@ func NextWorker() int {
 	return me.workerValue
 }
 
-func ConnectionOpened() {
+func NextDualWorker() (a, b int) {
+	initMetrics()
+
+	me.workerMutex.Lock()
+	defer me.workerMutex.Unlock()
+
+	me.workerValue++
+	a = me.workerValue
+
+	me.workerValue++
+	b = me.workerValue
+
+	me.workers.Add(2)
+	return
+}
+
+func ConnectionOpened(vec []string) {
 	initMetrics()
 	me.connectionsTotal.Inc()
+
+	me.connectionsActive.WithLabelValues(vec...).Inc()
+}
+
+func ConnectionClosed(vec []string) {
+	me.connectionsActive.WithLabelValues(vec...).Dec()
 }
 
 func CreateListenerVec(ns, name string, svcPort, tgtPort int32) []string {

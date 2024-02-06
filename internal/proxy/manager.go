@@ -215,7 +215,11 @@ func (m *manager) Dump(ctx context.Context) {
 		logger.Info("Dump: TSProxy", "namespace", svc.key.Namespace, "name", svc.key.Name)
 
 		for _, conn := range svc.listeners {
-			logger.Info("Dump: TSProxy service", "namespace", conn.namespace, "name", conn.name, "port", conn.exposeAsPort, "ps", conn.proxyservice)
+			logger.Info("Dump: TSProxy service",
+				"namespace", conn.namespace,
+				"name", conn.name,
+				"port", conn.exposeAsPort,
+				"ps", conn.proxyservice)
 		}
 	}
 	for port, conn := range m.ports {

@@ -17,9 +17,10 @@ type listener struct {
 	name         string
 	svcPort      int32
 	exposeAsPort int32
+	connectTo    string
 
 	listener    net.Listener
-	connections []*connection
+	connections map[int]*connection
 	mutex       sync.Mutex
 
 	metricsVec []string
@@ -46,6 +47,7 @@ func newListener(ps *proxyservice, ctx context.Context, ns, name string, svcPort
 		svcPort:      svcPort,
 		exposeAsPort: tgtPort,
 		metricsVec:   mvec,
+		connectTo:    fmt.Sprintf("%s.%s:%d", name, ns, svcPort),
 	}
 
 	return conn
@@ -67,7 +69,11 @@ func (conn *listener) Close(ctx context.Context) {
 func (conn *listener) Start(ctx context.Context) error {
 	logger := log.FromContext(ctx)
 
-	logger.Info("Starting listener", "key", conn.key, "namespace", conn.namespace, "name", conn.name, "port", conn.exposeAsPort)
+	logger.Info("Starting listener",
+		"key", conn.key,
+		"namespace", conn.namespace,
+		"name", conn.name,
+		"port", conn.exposeAsPort)
 
 	// // connect to service
 	// connsvc, err := net.Dial("tcp", fmt.Sprintf("%s.%s:%d", conn.name, conn.namespace, conn.svcPort))
@@ -111,6 +117,34 @@ func (conn *listener) Accept(workerID int) {
 			logger.Error(err, "Failed to create connection")
 			return
 		}
-		connect.Run()
+
+		a, b := metrics.NextDualWorker()
+		conn.AddConnection(a, connect)
+		connect.Run(a, b)
 	}
+}
+
+func (conn *listener) AddConnection(id int, c *connection) {
+	conn.mutex.Lock()
+	defer conn.mutex.Unlock()
+
+	if conn.connections == nil {
+		conn.connections = make(map[int]*connection)
+	}
+	conn.connections[id] = c
+
+	metrics.ConnectionOpened(conn.metricsVec)
+}
+
+func (conn *listener) RemoveConnection(id int) {
+	conn.mutex.Lock()
+	defer conn.mutex.Unlock()
+
+	if _, found := conn.connections[id]; !found {
+		return
+	}
+
+	metrics.ConnectionClosed(conn.metricsVec)
+
+	delete(conn.connections, id)
 }

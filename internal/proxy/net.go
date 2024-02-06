@@ -3,12 +3,10 @@ package proxy
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"time"
 
-	"github.com/AB-Lindex/tsproxy/internal/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -22,9 +20,9 @@ type connection struct {
 
 func newConnection(ps *proxyservice, listener *listener, accepted net.Conn) (*connection, error) {
 
-	outbound, err := net.DialTimeout("tcp", fmt.Sprintf("%s.%s:%d", listener.name, listener.namespace, listener.svcPort), 5*time.Second)
+	outbound, err := net.DialTimeout("tcp", listener.connectTo, 5*time.Second)
 	if err != nil {
-		accepted.Close()
+		_ = accepted.Close()
 		return nil, err
 	}
 
@@ -38,16 +36,16 @@ func newConnection(ps *proxyservice, listener *listener, accepted net.Conn) (*co
 	return conn, nil
 }
 
-func (conn *connection) Run() {
-	metrics.ConnectionOpened()
-	go conn.copy(conn.inbound, conn.outbound, metrics.NextWorker())
-	go conn.copy(conn.outbound, conn.inbound, metrics.NextWorker())
+func (conn *connection) Run(a, b int) {
+	go conn.copy(conn.inbound, conn.outbound, a, a)
+	go conn.copy(conn.outbound, conn.inbound, b, a)
 }
 
-func (conn *connection) copy(from, to net.Conn, workerID int) {
+func (conn *connection) copy(from, to net.Conn, workerID, primaryID int) {
 	logger := log.FromContext(context.Background())
-	defer logger.Info("Connection closed", "worker", workerID, "from", from.RemoteAddr(), "to", to.RemoteAddr())
 	logger.Info("Connection opened", "worker", workerID, "from", from.RemoteAddr(), "remote", to.RemoteAddr())
+	defer logger.Info("Connection closed", "worker", workerID, "from", from.RemoteAddr(), "to", to.RemoteAddr())
+	defer conn.listener.RemoveConnection(primaryID)
 
 	// Echo all incoming data.
 	_, err := io.Copy(to, from)
