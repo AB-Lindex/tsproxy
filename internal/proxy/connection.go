@@ -108,14 +108,14 @@ func (conn *listener) Accept(workerID int) {
 	for {
 		accepted, err := conn.listener.Accept()
 		if err != nil {
-			logger.Error(err, "Failed to accept connection")
-			return
+			logger.Error(err, "Failed to accept connection", "key", conn.key)
+			continue
 		}
 
 		connect, err := newConnection(conn.proxyservice, conn, accepted)
 		if err != nil {
-			logger.Error(err, "Failed to create connection")
-			return
+			logger.Error(err, "Failed to create connection", "key", conn.key)
+			continue
 		}
 
 		a, b := metrics.NextDualWorker()

@@ -37,14 +37,23 @@ func newConnection(ps *proxyservice, listener *listener, accepted net.Conn) (*co
 }
 
 func (conn *connection) Run(a, b int) {
+	logger := log.FromContext(context.Background())
+	logger.Info("Connection opened",
+		"key", conn.proxyservice.key,
+		"worker", a,
+		"from", conn.inbound.RemoteAddr().String(),
+		"remote", conn.outbound.RemoteAddr().String())
 	go conn.copy(conn.inbound, conn.outbound, a, a)
 	go conn.copy(conn.outbound, conn.inbound, b, a)
 }
 
 func (conn *connection) copy(from, to net.Conn, workerID, primaryID int) {
 	logger := log.FromContext(context.Background())
-	logger.Info("Connection opened", "worker", workerID, "from", from.RemoteAddr(), "remote", to.RemoteAddr())
-	defer logger.Info("Connection closed", "worker", workerID, "from", from.RemoteAddr(), "to", to.RemoteAddr())
+	defer logger.Info("Connection closed",
+		"key", conn.proxyservice.key,
+		"worker", workerID,
+		"from", from.RemoteAddr().String(),
+		"to", to.RemoteAddr().String())
 	defer conn.listener.RemoveConnection(primaryID)
 
 	// Echo all incoming data.
