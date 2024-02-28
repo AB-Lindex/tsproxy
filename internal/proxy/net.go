@@ -39,30 +39,32 @@ func newConnection(ps *proxyservice, listener *listener, accepted net.Conn) (*co
 func (conn *connection) Run(a, b int) {
 	logger := log.FromContext(context.Background())
 	logger.Info("Connection opened",
-		"key", conn.proxyservice.key,
+		"key", conn.listener.key,
 		"worker", a,
-		"from", conn.inbound.RemoteAddr().String(),
-		"remote", conn.outbound.RemoteAddr().String())
+		"from", conn.inbound.RemoteAddr().String())
+	// "remote", conn.outbound.RemoteAddr().String())
 	go conn.copy(conn.inbound, conn.outbound, a, a)
 	go conn.copy(conn.outbound, conn.inbound, b, a)
 }
 
 func (conn *connection) copy(from, to net.Conn, workerID, primaryID int) {
 	logger := log.FromContext(context.Background())
-	defer logger.Info("Connection closed",
-		"key", conn.proxyservice.key,
-		"worker", workerID,
-		"from", from.RemoteAddr().String(),
-		"to", to.RemoteAddr().String())
+	if workerID == primaryID {
+		defer logger.Info("Connection closed",
+			"key", conn.listener.key,
+			"worker", workerID,
+			"from", from.RemoteAddr().String(),
+			"to", to.RemoteAddr().String())
+	}
 	defer conn.listener.RemoveConnection(primaryID)
 
 	// Echo all incoming data.
 	_, err := io.Copy(to, from)
 
 	if errors.Is(err, net.ErrClosed) {
-		logger.Info("Connection closed", "worker", workerID)
+		logger.Info("Connection closing", "key", conn.listener.key, "worker", workerID)
 	} else if err != nil {
-		logger.Error(err, "Connection error", "worker", workerID)
+		logger.Error(err, "Connection error", "key", conn.listener.key, "worker", workerID)
 	}
 	// Shut down the connection.
 	_ = from.Close()
