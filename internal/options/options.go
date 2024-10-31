@@ -1,5 +1,6 @@
 package options
 
 var Flags struct {
-	Debug bool
+	Debug     bool
+	Keepalive bool
 }

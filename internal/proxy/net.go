@@ -7,6 +7,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/AB-Lindex/tsproxy/internal/options"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -18,9 +19,27 @@ type connection struct {
 	outbound net.Conn
 }
 
-func newConnection(ps *proxyservice, listener *listener, accepted net.Conn) (*connection, error) {
+var keepalive = net.KeepAliveConfig{
+	Enable:   true,
+	Idle:     10 * time.Second,
+	Interval: 10 * time.Second,
+	Count:    5,
+}
 
-	outbound, err := net.DialTimeout("tcp", listener.connectTo, 5*time.Second)
+var dialer = &net.Dialer{
+	Timeout:         5 * time.Second,
+	KeepAliveConfig: keepalive,
+}
+
+func dial(address string) (net.Conn, error) {
+	if options.Flags.Keepalive {
+		return dialer.Dial("tcp", address)
+	}
+	return net.DialTimeout("tcp", address, 5*time.Second)
+}
+
+func newConnection(ps *proxyservice, listener *listener, accepted net.Conn) (*connection, error) {
+	outbound, err := dial(listener.connectTo)
 	if err != nil {
 		_ = accepted.Close()
 		return nil, err
@@ -53,8 +72,7 @@ func (conn *connection) copy(from, to net.Conn, workerID, primaryID int) {
 		defer logger.Info("Connection closed",
 			"key", conn.listener.key,
 			"worker", workerID,
-			"from", from.RemoteAddr().String(),
-			"to", to.RemoteAddr().String())
+			"from", from.RemoteAddr().String())
 	}
 	defer conn.listener.RemoveConnection(primaryID)
 

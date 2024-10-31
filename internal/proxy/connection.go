@@ -2,11 +2,13 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
 
 	"github.com/AB-Lindex/tsproxy/internal/metrics"
+	"github.com/AB-Lindex/tsproxy/internal/options"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -24,6 +26,10 @@ type listener struct {
 	mutex       sync.Mutex
 
 	metricsVec []string
+}
+
+var netListener = net.ListenConfig{
+	KeepAliveConfig: keepalive,
 }
 
 func makeConnectionKey(ns, name string, svcPort, tgtPort int32) string {
@@ -66,6 +72,14 @@ func (conn *listener) Close(ctx context.Context) {
 	metrics.ListenerClosed(conn.metricsVec)
 }
 
+func listen(port int32) (net.Listener, error) {
+	address := fmt.Sprintf(":%d", port)
+	if options.Flags.Keepalive {
+		return netListener.Listen(context.Background(), "tcp", address)
+	}
+	return net.Listen("tcp", address)
+}
+
 func (conn *listener) Start(ctx context.Context) error {
 	logger := log.FromContext(ctx)
 
@@ -84,7 +98,8 @@ func (conn *listener) Start(ctx context.Context) error {
 	// conn.svcConn = connsvc
 
 	// listen on target port
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", conn.exposeAsPort))
+	listener, err := listen(conn.exposeAsPort)
+
 	if err != nil {
 		logger.Error(err, "Failed to listen on target port")
 		return err
@@ -103,11 +118,15 @@ func (conn *listener) Start(ctx context.Context) error {
 func (conn *listener) Accept(workerID int) {
 	logger := log.FromContext(context.Background())
 	defer logger.Info("Listener closed", "worker", workerID)
-	logger.Info("Accepting connections", "worker", workerID)
+	logger.Info("Accepting connections", "key", conn.key, "worker", workerID)
 
 	for {
 		accepted, err := conn.listener.Accept()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				logger.Error(err, "Listener closed", "key", conn.key)
+				return
+			}
 			logger.Error(err, "Failed to accept connection", "key", conn.key)
 			continue
 		}

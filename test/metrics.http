@@ -1,4 +1,10 @@
 @base=http://localhost:8080
+@health=http://localhost:8081
 
 ###
 GET {{base}}/metrics
+
+###
+GET {{health}}/readyz
+###
+GET {{health}}/healthz
